@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface FoldStatus {
   connected: boolean;
@@ -22,13 +22,38 @@ export function FoldLoginCard({
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const autoSynced = useRef(false);
 
   useEffect(() => {
     fetch('/api/fold/status')
       .then((r) => r.json())
-      .then(setStatus)
+      .then((s) => {
+        setStatus(s);
+        // Auto-sync on page load if connected
+        if (s.connected && !s.expired && !autoSynced.current) {
+          autoSynced.current = true;
+          triggerSync();
+        }
+      })
       .catch(() => setStatus({ connected: false }));
   }, []);
+
+  async function triggerSync() {
+    setSyncing(true);
+    setSyncMsg('Auto-syncing...');
+    try {
+      const res = await fetch('/api/fold/sync', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setSyncMsg(data.added > 0 ? `Synced ${data.added} new transactions` : 'Up to date');
+      if (data.added > 0) onSync();
+    } catch (err: any) {
+      setSyncMsg(`Sync failed: ${err.message}`);
+    }
+    setSyncing(false);
+    // Clear message after 5s
+    setTimeout(() => setSyncMsg(''), 5000);
+  }
 
   async function handleSendOtp() {
     setError('');
@@ -63,6 +88,8 @@ export function FoldLoginCard({
       setStep('idle');
       setOtp('');
       onConnected();
+      // Auto-sync after connecting
+      triggerSync();
     } catch (err: any) {
       setError(err.message);
     }
@@ -73,57 +100,42 @@ export function FoldLoginCard({
     await fetch('/api/fold/disconnect', { method: 'POST' });
     setStatus({ connected: false });
     setStep('idle');
-  }
-
-  async function handleSync() {
-    setSyncing(true);
-    setSyncMsg('');
-    try {
-      const res = await fetch('/api/fold/sync', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setSyncMsg(`Synced ${data.added} new transactions`);
-      onSync();
-    } catch (err: any) {
-      setSyncMsg(`Sync failed: ${err.message}`);
-    }
-    setSyncing(false);
+    autoSynced.current = false;
   }
 
   if (status === null) return null;
 
   if (status.connected) {
     return (
-      <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 mb-6">
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 mb-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-slate-200 text-sm font-medium">Fold Money Connected</span>
-            {status.expired && (
-              <span className="text-xs text-amber-400">(session expired — re-login)</span>
+            {syncing && <span className="text-xs text-indigo-400">Syncing...</span>}
+            {!syncing && syncMsg && (
+              <span className={`text-xs ${syncMsg.includes('failed') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {syncMsg}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={handleSync}
+              onClick={triggerSync}
               disabled={syncing}
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
+              className="text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-xs font-medium transition-colors"
             >
               {syncing ? 'Syncing...' : 'Sync Now'}
             </button>
+            <span className="text-slate-700">|</span>
             <button
               onClick={handleDisconnect}
-              className="text-slate-500 hover:text-rose-400 text-sm transition-colors"
+              className="text-slate-500 hover:text-rose-400 text-xs transition-colors"
             >
               Disconnect
             </button>
           </div>
         </div>
-        {syncMsg && (
-          <p className={`text-xs mt-2 ${syncMsg.includes('failed') ? 'text-rose-400' : 'text-emerald-400'}`}>
-            {syncMsg}
-          </p>
-        )}
       </div>
     );
   }
