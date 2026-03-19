@@ -4,7 +4,7 @@ import { getTokens } from '@/lib/fold-token-store';
 
 export async function POST() {
   try {
-    const tokens = getTokens();
+    const tokens = await getTokens();
     if (!tokens) {
       return NextResponse.json({ error: 'Not connected to Fold' }, { status: 401 });
     }
