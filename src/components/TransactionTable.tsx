@@ -1,6 +1,7 @@
 'use client';
 import { Transaction } from '@/lib/google-sheets';
 import { useState } from 'react';
+import { getCategoryColor, getCategoryIcon } from '@/lib/categories';
 
 const TYPE_STYLE: Record<string, string> = {
   Income: 'bg-emerald-900/50 text-emerald-300 border border-emerald-700/40',
@@ -8,12 +9,22 @@ const TYPE_STYLE: Record<string, string> = {
   Investment: 'bg-violet-900/50 text-violet-300 border border-violet-700/40',
 };
 
-export function TransactionTable({ transactions }: { transactions: Transaction[] }) {
+export function TransactionTable({
+  transactions,
+  categoryFilter,
+}: {
+  transactions: Transaction[];
+  categoryFilter?: string | null;
+}) {
   const [filter, setFilter] = useState<'All' | 'Income' | 'Expense' | 'Investment'>('All');
   const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showCount, setShowCount] = useState(20);
 
   const filtered = [...transactions]
     .filter((t) => filter === 'All' || t.type === filter)
+    .filter((t) => !categoryFilter || t.category === categoryFilter)
     .filter((t) => {
       const q = search.toLowerCase();
       return (
@@ -22,15 +33,30 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
         t.source.toLowerCase().includes(q)
       );
     })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 20);
+    .filter((t) => {
+      if (dateFrom && t.date < dateFrom) return false;
+      if (dateTo && t.date > dateTo) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const displayed = filtered.slice(0, showCount);
+  const hasMore = filtered.length > showCount;
 
   const tabs = ['All', 'Income', 'Expense', 'Investment'] as const;
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-        <h2 className="text-slate-100 font-semibold">Recent Transactions</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-slate-100 font-semibold">Transactions</h2>
+          <span className="text-xs text-slate-500">({filtered.length})</span>
+          {categoryFilter && (
+            <span className="text-xs bg-indigo-900/50 text-indigo-300 border border-indigo-700/40 px-2 py-0.5 rounded-full">
+              {categoryFilter}
+            </span>
+          )}
+        </div>
         <div className="flex gap-2 flex-wrap">
           <input
             type="text"
@@ -55,6 +81,31 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
         </div>
       </div>
 
+      {/* Date range filter */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        <span className="text-slate-600 text-xs self-center">to</span>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-slate-300 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        />
+        {(dateFrom || dateTo) && (
+          <button
+            onClick={() => { setDateFrom(''); setDateTo(''); }}
+            className="text-xs text-slate-500 hover:text-slate-300"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -67,20 +118,28 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {displayed.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center text-slate-500 py-10">
                   No transactions found
                 </td>
               </tr>
             ) : (
-              filtered.map((t) => (
+              displayed.map((t) => (
                 <tr key={t.id} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
                   <td className="py-3 pr-4 text-slate-400 font-mono text-xs">{t.date}</td>
                   <td className="py-3 pr-4 text-slate-200 max-w-[160px] truncate">
                     {t.description || t.category}
                   </td>
-                  <td className="py-3 pr-4 text-slate-400">{t.category}</td>
+                  <td className="py-3 pr-4">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: getCategoryColor(t.category) }}
+                      />
+                      <span className="text-slate-400">{t.category}</span>
+                    </span>
+                  </td>
                   <td className="py-3 pr-4 text-slate-400">{t.source || '—'}</td>
                   <td className="py-3 pr-4">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_STYLE[t.type]}`}>
@@ -96,6 +155,15 @@ export function TransactionTable({ transactions }: { transactions: Transaction[]
           </tbody>
         </table>
       </div>
+
+      {hasMore && (
+        <button
+          onClick={() => setShowCount((c) => c + 20)}
+          className="w-full mt-4 py-2 text-sm text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+        >
+          Load More ({filtered.length - showCount} remaining)
+        </button>
+      )}
     </div>
   );
 }

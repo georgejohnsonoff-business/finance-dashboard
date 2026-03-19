@@ -2,10 +2,12 @@ interface Props {
   totalIncome: number;
   totalExpenses: number;
   totalInvestments: number;
+  investmentCurrentValue?: number;
 }
 
-export function NetWorthCards({ totalIncome, totalExpenses, totalInvestments }: Props) {
+export function NetWorthCards({ totalIncome, totalExpenses, totalInvestments, investmentCurrentValue }: Props) {
   const netWorth = totalIncome + totalExpenses; // expenses are negative
+  const liveInvestment = investmentCurrentValue ?? Math.abs(totalInvestments);
 
   const cards = [
     {
@@ -34,11 +36,12 @@ export function NetWorthCards({ totalIncome, totalExpenses, totalInvestments }: 
     },
     {
       title: 'Invested',
-      value: Math.abs(totalInvestments),
+      value: liveInvestment,
       color: 'text-violet-400',
       bg: 'from-violet-900/20 to-transparent',
       border: 'border-violet-800/40',
       icon: '🏦',
+      subtitle: investmentCurrentValue ? 'Live value' : undefined,
     },
   ];
 
@@ -60,6 +63,9 @@ export function NetWorthCards({ totalIncome, totalExpenses, totalInvestments }: 
             <p className={`text-xs mt-1 ${netWorth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               {netWorth >= 0 ? '▲ Positive balance' : '▼ Negative balance'}
             </p>
+          )}
+          {'subtitle' in c && c.subtitle && (
+            <p className="text-xs mt-1 text-violet-400/70">{c.subtitle}</p>
           )}
         </div>
       ))}
