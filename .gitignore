@@ -32,3 +32,4 @@ next-env.d.ts
 
 # Fold Money tokens
 fold-tokens.json
+push-to-github.sh
